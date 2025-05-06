@@ -11,9 +11,9 @@
     "influxdb": {
         "protocol": "http",
         "port": "8086",
-        "host": "localhost",
+        "host": "${INFLUXDB_HOST}",
         "version": 2,
-        "organisation": "test_org_1",
+        "organisation": "${INFLUXDB_ORG}",
         "database": "${INFLUXDB_BUCKET}",
         "token": "${INFLUXDB_TOKEN}",
         "tags": "category=default"
