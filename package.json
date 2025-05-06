@@ -1,0 +1,16 @@
+{
+    "name": "sitespeed-local-runner",
+    "version": "1.0.0",
+    "description": "Local web app to run sitespeed.io tests via Docker Compose",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "body-parser": "^1.20.2",
+        "express": "^4.19.2",
+        "multer": "^1.4.5-lts.2"
+    },
+    "author": "",
+    "license": "ISC"
+}

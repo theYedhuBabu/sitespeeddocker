@@ -1,0 +1,11 @@
+services:
+  sitespeed:
+    build: .
+    container_name: sitespeed
+    command: --config /config/sitespeed-config.json ${EXTRA_ARGS} ${TARGET_URL}
+    shm_size: "1g"
+    volumes:
+      - ./results:/sitespeed.io
+      - ./sitespeed-config.json:/config/sitespeed-config.json:ro
+      - ./uploads:/uploads
+    network_mode: "host"
