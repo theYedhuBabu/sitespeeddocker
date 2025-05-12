@@ -1,0 +1,5 @@
+FROM sitespeedio/sitespeed.io:latest
+
+# Install InfluxDB plugin
+RUN npm install -g @sitespeed.io/plugin-influxdb
+

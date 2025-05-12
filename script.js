@@ -1,171 +1,102 @@
-const additionalOptionsContainer = document.getElementById('additionalOptionsContainer');
-const addOptionButton = document.getElementById('addOptionButton');
-const optionCountSpan = document.getElementById('optionCount');
-let optionCounter = 0; // To keep track of the number of options
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('sitespeedConfigForm');
+  const resultsDiv = document.getElementById('results');
+  const resultsContent = document.getElementById('resultsContent');
+  const browseBtn = document.getElementById('browseBtn');
+  const fileInput = document.getElementById('filePicker');
+  const urlInput = document.getElementById('url');
 
-const MAX_OPTIONS = 30;
+  // File upload handling
+  browseBtn.addEventListener('click', () => fileInput.click());
+  
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
 
-// Function to create a new option input group
-function createOptionInput() {
-    optionCounter++;
-
-    const div = document.createElement('div');
-    div.classList.add('option-input-group', 'flex', 'items-center', 'space-x-2'); // Add flex layout for the remove button
-
-    // const label = document.createElement('label');
-    // label.setAttribute('for', `additionalOption${optionCounter}`);
-    // label.classList.add('block', 'text-sm', 'font-medium', 'text-gray-700');
-    // label.textContent = `Option ${optionCounter}:`; // Dynamic label
-
-    const input = document.createElement('input');
-    input.setAttribute('type', 'text');
-    input.setAttribute('id', `additionalOption${optionCounter}`);
-    input.setAttribute('name', 'additionalOption');
-    input.setAttribute('placeholder', 'key=value');
-    input.classList.add('mt-1', 'block', 'w-full', 'rounded-md', 'border-gray-300', 'shadow-sm', 'focus:border-blue-500', 'focus:ring-blue-500', 'p-2');
-
-    // Create the remove button (X)
-    const removeButton = document.createElement('button');
-    removeButton.type = 'button';
-    removeButton.classList.add('text-red-500', 'hover:text-red-700', 'focus:outline-none');
-    removeButton.textContent = 'X';
-
-    // Attach event listener to the remove button
-    removeButton.addEventListener('click', function () {
-        div.remove(); // Remove the option input div
-        optionCounter--; // Decrease the option counter
-        updateOptionUI(); // Update the UI for option count
-    });
-
-    // div.appendChild(label);
-    div.appendChild(input);
-    div.appendChild(removeButton); // Append the remove button next to the input
-
-    return div;
-}
-
-
-// Function to update the option count display and button state
-function updateOptionUI() {
-    optionCountSpan.textContent = `${optionCounter}/${MAX_OPTIONS}`;
-    if (optionCounter >= MAX_OPTIONS) {
-        addOptionButton.disabled = true;
-    } else {
-        addOptionButton.disabled = false;
-    }
-}
-
-
-// Event listener for the Add Option button
-addOptionButton.addEventListener('click', function() {
-    if (optionCounter < MAX_OPTIONS) {
-        const newOptionInput = createOptionInput();
-        additionalOptionsContainer.appendChild(newOptionInput);
-        updateOptionUI();
-    }
-});
-
-// Optionally add a few initial options on page load
-// For now, we start with 0 and let the user add them.
-
-// Update UI initially
-updateOptionUI();
-
-
-document.getElementById('sitespeedConfigForm').addEventListener('submit', function(event) {
-    event.preventDefault(); // Prevent default form submission
-
-    const form = event.target;
-    const formData = new FormData(form);
-
-    // Collect all form data into a simple object
-    const config = {};
-
-    // Collect basic options
-    if (formData.get('url')) config.url = formData.get('url');
-    if (formData.get('browser')) config.browser = formData.get('browser');
-    if (formData.get('iterations')) config.iterations = formData.get('iterations');
-
-    // Collect additional options
-    // Use form.querySelectorAll to get all inputs with the name 'additionalOption'
-    const additionalOptions = form.querySelectorAll('input[name="additionalOption"]');
-    config.additionalOptions = []; // Initialize an array for additional options
-    additionalOptions.forEach(input => {
-        if (input.value) { // Only include if the input has a value
-            config.additionalOptions.push(input.value); // Collect the key=value string
-        }
-    });
-
-
-    console.log("Collected Configuration:", config);
-
-    // Display a waiting message
-    const resultsDiv = document.getElementById('results');
-    const resultsContent = document.getElementById('resultsContent');
-    resultsContent.textContent = 'Running sitespeed.io test... Please wait.';
-    resultsDiv.classList.remove('hidden');
-
-    // Send the configuration to the backend
-    fetch('/run-sitespeed-test', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config),
-    })
-    .then(response => {
-        // Check if the response is OK (status 200-299)
-        if (!response.ok) {
-            // If not OK, parse the error response
-            return response.json().then(err => { throw new Error(err.message || 'Backend error'); });
-        }
-        // If OK, parse the success response
-        return response.json();
-    })
-    .then(data => {
-        console.log('Success:', data);
-        // Display results in the #results div
-        resultsContent.textContent = 'Status: ' + data.status + '\n\n';
-        resultsContent.textContent += 'Message: ' + data.message + '\n\n';
-        resultsContent.textContent += '--- Sitespeed.io Output (stdout) ---\n' + data.stdout + '\n\n';
-        resultsContent.textContent += '--- Sitespeed.io Errors (stderr) ---\n' + data.stderr;
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        // Display error message
-        resultsContent.textContent = 'Error running test: ' + error;
-    });
-});
-
-const browseBtn = document.getElementById('browseBtn');
-const fileInput = document.getElementById('filePicker');
-const urlInput = document.getElementById('url');
-
-browseBtn.addEventListener('click', () => {
-  fileInput.click();
-});
-
-fileInput.addEventListener('change', async () => {
-  const file = fileInput.files[0];
-  if (file) {
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch('/upload-file', {
+      browseBtn.disabled = true;
+      browseBtn.textContent = 'Uploading...';
+
+      const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData
       });
 
-      const result = await response.json();
-      if (result.filePath) {
-        urlInput.value = result.filePath; // This will be passed as config.url
-      } else {
-        alert('File upload failed.');
-      }
+      const data = await response.json();
+      urlInput.value = data.filePath;
     } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload file.');
+      alert('Upload failed: ' + error.message);
+    } finally {
+      browseBtn.disabled = false;
+      browseBtn.textContent = 'Browse';
     }
-  }
+  });
+
+  // Test submission
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Show loading state
+    resultsDiv.classList.remove('hidden');
+    resultsContent.innerHTML = `
+      <div class="flex items-center space-x-2 text-blue-600">
+        <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4" opacity="0.25"></circle>
+          <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Running performance test...</span>
+      </div>
+    `;
+
+    // Collect form data
+    const config = {
+      url: urlInput.value,
+      browser: document.getElementById('browser').value,
+      iterations: document.getElementById('iterations').value,
+      additionalOptions: Array.from(
+        document.querySelectorAll('input[name="additionalOption"]')
+      ).map(input => input.value.trim()).filter(Boolean)
+    };
+
+    try {
+      const response = await fetch('/api/run-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'error') {
+        throw new Error(data.error || 'Test failed');
+      }
+
+      // Show results
+      resultsContent.innerHTML = `
+        <div class="mb-4 p-4 bg-green-50 rounded-lg">
+          <h3 class="font-bold text-green-800">✓ Test Completed Successfully</h3>
+          ${data.resultUrl ? `
+            <a href="${data.resultUrl}" target="_blank" 
+               class="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              View Full Report
+            </a>
+          ` : ''}
+        </div>
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+          <h4 class="font-bold mb-2">Test Output:</h4>
+          <pre class="text-sm whitespace-pre-wrap">${data.output}</pre>
+        </div>
+      `;
+    } catch (error) {
+      resultsContent.innerHTML = `
+        <div class="p-4 bg-red-50 rounded-lg">
+          <h3 class="font-bold text-red-800">✗ Test Failed</h3>
+          <p class="mt-2">${error.message}</p>
+        </div>
+      `;
+    }
+  });
 });

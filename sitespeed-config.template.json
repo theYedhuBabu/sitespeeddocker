@@ -10,12 +10,15 @@
     },
     "influxdb": {
         "protocol": "http",
-        "port": "8086",
-        "host": "${INFLUXDB_HOST}",
+        "host": "influxdb",
+        "port": 8086,
+        "database": "mysitespeed",
+        "username": "admin",
+        "password": "admin123",
         "version": 2,
-        "organisation": "${INFLUXDB_ORG}",
-        "database": "${INFLUXDB_BUCKET}",
-        "token": "${INFLUXDB_TOKEN}",
+        "organization": "myorg",
+        "bucket": "mysitespeed",
+        "token": "mytoken",
         "tags": "category=default"
     }
 }
