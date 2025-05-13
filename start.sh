@@ -17,5 +17,6 @@
 # trap cleanup SIGINT SIGTERM EXIT
 
 # Start the server
+docker network create sitespeed-net 
 docker build -f Dockerfile.sitespeed -t my-sitespeedio .
 docker compose up --build -d
