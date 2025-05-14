@@ -60,7 +60,7 @@ app.post('/api/run-test', async (req, res) => {
 
   let sitespeedUrl = url;
   if (url.startsWith('/uploads/')) {
-    sitespeedUrl = `file:///app/uploads/${path.basename(url)}`;
+    sitespeedUrl = `/app/uploads/${path.basename(url)}`;
   }
 
   const hostSitespeedConfigPath = process.env.HOST_SITESPEED_CONFIG_PATH;
@@ -194,18 +194,18 @@ app.get('/api/tests/:id', async (req, res) => {
     }
     
     // --- START: Output allRecords object to JSON file for debugging ---
-    const debugOutputDir = path.join(__dirname, 'debug_output');
-    if (!fs.existsSync(debugOutputDir)) {
-      fs.mkdirSync(debugOutputDir, { recursive: true });
-    }
-    const outputFilePath = path.join(debugOutputDir, `raw_test_data_${testId}.json`);
-    fs.writeFile(outputFilePath, JSON.stringify(allRecords, null, 2), (err) => {
-      if (err) {
-        console.error(`Error writing raw debug JSON file for ${testId}:`, err);
-      } else {
-        console.log(`Successfully wrote raw debug JSON for ${testId} to ${outputFilePath}`);
-      }
-    });
+    // const debugOutputDir = path.join(__dirname, 'debug_output');
+    // if (!fs.existsSync(debugOutputDir)) {
+    //   fs.mkdirSync(debugOutputDir, { recursive: true });
+    // }
+    // const outputFilePath = path.join(debugOutputDir, `raw_test_data_${testId}.json`);
+    // fs.writeFile(outputFilePath, JSON.stringify(allRecords, null, 2), (err) => {
+    //   if (err) {
+    //     console.error(`Error writing raw debug JSON file for ${testId}:`, err);
+    //   } else {
+    //     console.log(`Successfully wrote raw debug JSON for ${testId} to ${outputFilePath}`);
+    //   }
+    // });
     // --- END: Output allRecords object to JSON file for debugging ---
 
 

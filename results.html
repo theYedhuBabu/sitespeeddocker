@@ -7,12 +7,14 @@
     <title>Test Results - QB Performance Testing</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <link rel="stylesheet" href="style.css"> <style>
+    <link rel="stylesheet" href="style.css"> 
+    <style>
         /* Additional styles specific to results page if needed */
         .chart-container {
             position: relative;
-            height: 40vh;
-            width: 100%; /* Adjusted for responsiveness */
+            min-height: 300px; /* Ensure container has a minimum height */
+            height: 40vh; /* Default height */
+            width: 100%; 
             margin-bottom: 20px;
         }
         .loader {
@@ -63,7 +65,7 @@
     <div class="container mx-auto bg-white p-8 rounded-lg shadow-lg">
         <div class="flex justify-between items-center mb-6">
             <div class="flex items-center">
-                <img src="/images/QBurstlogo.svg" alt="Logo" class="w-24 h-auto mr-4">
+                <img src="https://qburst.com/images/logos/logo.svg" alt="Logo" class="w-24 h-auto mr-4" onerror="this.style.display='none'"> 
                 <h1 class="text-3xl font-bold text-gray-800">Performance Test Results</h1>
             </div>
             <a href="/" class="text-blue-600 hover:text-blue-800 hover:underline"> &larr; Back to Test Configuration</a>
@@ -83,13 +85,13 @@
                         <tr>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Select</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test ID/Name</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL Tested</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL Tested (Primary)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200" id="testsTableBody">
-                        </tbody>
+                    </tbody>
                 </table>
             </div>
             <p id="noTestsMessage" class="text-gray-600 mt-4 hidden">No test runs found.</p>
@@ -100,7 +102,7 @@
             <h2 class="text-2xl font-semibold mb-4 text-gray-700">Test Comparison</h2>
             <div id="loaderComparison" class="loader hidden"></div>
             <div id="comparisonResults" class="comparison-grid">
-                </div>
+            </div>
             <p id="comparisonInstructions" class="text-gray-600 mt-4">Select 2 or 3 tests from the 'Test Runs' tab to compare.</p>
             <div class="chart-container mt-6">
                 <canvas id="comparisonChart"></canvas>
@@ -112,8 +114,15 @@
             <div class="relative bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                 <button id="closeModalButton" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">&times;</button>
                 <h2 class="text-2xl font-semibold mb-6 text-gray-700" id="detailsTestId">Test Details</h2>
+                
+                <div id="urlSelectorContainer" class="mb-4" style="display: none;">
+                    <label for="urlSelector" class="block text-sm font-medium text-gray-700 mb-1">Select Page/URL:</label>
+                    <select id="urlSelector" name="urlSelector" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    </select>
+                </div>
+
                 <div id="loaderTestDetails" class="loader"></div>
-                <div id="testDetailsContent" class="space-y-6">
+                <div id="testDetailsContent" class="space-y-6" style="display: none;"> 
                     <div>
                         <h3 class="text-xl font-medium text-gray-800 mb-2">General Information</h3>
                         <p><strong>URL:</strong> <span id="detailsUrl"></span></p>
@@ -123,15 +132,15 @@
                     </div>
                     <div>
                         <h3 class="text-xl font-medium text-gray-800 mb-2">Key Metrics</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="detailsMetricsSummary">
-                            </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="detailsMetricsSummary">
+                        </div>
                     </div>
                     <div>
                         <h3 class="text-xl font-medium text-gray-800 mb-2">Performance Visualizations</h3>
-                        <div class="chart-container">
+                        <div class="chart-container" id="timingChartContainer"> {/* Added ID here */}
                             <canvas id="timingChart"></canvas>
                         </div>
-                        <div class="chart-container">
+                        <div class="chart-container" id="contentBreakdownChartContainer"> {/* Added ID here */}
                             <canvas id="contentBreakdownChart"></canvas>
                         </div>
                     </div>
