@@ -45,6 +45,7 @@ services:
       - ${UPLOADS_DIR}:/app/uploads
       - ${RESULTS_DIR}:/usr/share/nginx/html/results
       - ${CONFIG_FILE}:/app/sitespeed-config.json:ro
+      - ${RESULTS_DIR}:/app/debug_output
     depends_on:
       - influxdb
     networks:
