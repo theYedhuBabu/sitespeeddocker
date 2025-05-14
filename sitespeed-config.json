@@ -13,12 +13,8 @@
         "host": "influxdb",
         "port": 8086,
         "database": "mysitespeed",
-        "username": "admin",
-        "password": "admin123",
         "version": 2,
-        "organization": "myorg",
-        "bucket": "mysitespeed",
-        "token": "mytoken",
-        "tags": "category=default"
+        "organisation": "myorg",
+        "token": "mytoken"
     }
 }

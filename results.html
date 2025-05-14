@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Results - QB Performance Testing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="style.css"> <style>
+        /* Additional styles specific to results page if needed */
+        .chart-container {
+            position: relative;
+            height: 40vh;
+            width: 100%; /* Adjusted for responsiveness */
+            margin-bottom: 20px;
+        }
+        .loader {
+            border: 5px solid #f3f3f3; /* Light grey */
+            border-top: 5px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .tab-button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-bottom: none;
+            background-color: #f9fafb; /* gray-50 */
+            border-radius: 0.375rem 0.375rem 0 0; /* rounded-t-md */
+        }
+        .tab-button.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            font-weight: 600; /* semibold */
+        }
+        .tab-content {
+            display: none;
+            border: 1px solid #d1d5db; /* gray-300 */
+            padding: 20px;
+            border-top: none;
+            border-radius: 0 0 0.375rem 0.375rem; /* rounded-b-md */
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 p-6 font-['Inter',_sans-serif]">
+    <div class="container mx-auto bg-white p-8 rounded-lg shadow-lg">
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center">
+                <img src="/images/QBurstlogo.svg" alt="Logo" class="w-24 h-auto mr-4">
+                <h1 class="text-3xl font-bold text-gray-800">Performance Test Results</h1>
+            </div>
+            <a href="/" class="text-blue-600 hover:text-blue-800 hover:underline"> &larr; Back to Test Configuration</a>
+        </div>
+
+        <div class="mb-6">
+            <button id="tabTestList" class="tab-button active">Test Runs</button>
+            <button id="tabComparison" class="tab-button">Compare Tests</button>
+        </div>
+
+        <div id="testListContent" class="tab-content active">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Available Test Runs</h2>
+            <div id="loaderTestList" class="loader"></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200" id="testsTable">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Select</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test ID/Name</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL Tested</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="testsTableBody">
+                        </tbody>
+                </table>
+            </div>
+            <p id="noTestsMessage" class="text-gray-600 mt-4 hidden">No test runs found.</p>
+            <button id="compareSelectedButton" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50" disabled>Compare Selected (<span id="selectedCount">0</span>)</button>
+        </div>
+
+        <div id="comparisonContent" class="tab-content">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Test Comparison</h2>
+            <div id="loaderComparison" class="loader hidden"></div>
+            <div id="comparisonResults" class="comparison-grid">
+                </div>
+            <p id="comparisonInstructions" class="text-gray-600 mt-4">Select 2 or 3 tests from the 'Test Runs' tab to compare.</p>
+            <div class="chart-container mt-6">
+                <canvas id="comparisonChart"></canvas>
+            </div>
+        </div>
+
+
+        <div id="testDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50 p-4">
+            <div class="relative bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <button id="closeModalButton" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">&times;</button>
+                <h2 class="text-2xl font-semibold mb-6 text-gray-700" id="detailsTestId">Test Details</h2>
+                <div id="loaderTestDetails" class="loader"></div>
+                <div id="testDetailsContent" class="space-y-6">
+                    <div>
+                        <h3 class="text-xl font-medium text-gray-800 mb-2">General Information</h3>
+                        <p><strong>URL:</strong> <span id="detailsUrl"></span></p>
+                        <p><strong>Timestamp:</strong> <span id="detailsTimestamp"></span></p>
+                        <p><strong>Browser:</strong> <span id="detailsBrowser"></span></p>
+                        <p><strong>Iterations:</strong> <span id="detailsIterations"></span></p>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-medium text-gray-800 mb-2">Key Metrics</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="detailsMetricsSummary">
+                            </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-medium text-gray-800 mb-2">Performance Visualizations</h3>
+                        <div class="chart-container">
+                            <canvas id="timingChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="contentBreakdownChart"></canvas>
+                        </div>
+                    </div>
+                     <button id="downloadReportButton" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Download HTML Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="results_script.js"></script>
+</body>
+</html>

@@ -1,54 +1,69 @@
-// server.js
 const express = require('express');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-require('dotenv').config(); 
+require('dotenv').config();
+const { InfluxDB } = require('@influxdata/influxdb-client');
 
 const app = express();
-// __dirname is the directory where server.js is located.
-// If server.js is in /app (as per Dockerfile), uploadDir will be /app/uploads
 
-const uploadDir = process.env.UPLOADS_DIR; 
-console.log(uploadDir + "blah")
-// Ensure the upload directory exists when the server starts
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// --- InfluxDB Configuration ---
+const influxUrl = process.env.INFLUXDB_URL;
+const influxToken = process.env.DOCKER_INFLUXDB_INIT_ADMIN_TOKEN;
+const influxOrg = process.env.DOCKER_INFLUXDB_INIT_ORG;
+const influxBucket = process.env.DOCKER_INFLUXDB_INIT_BUCKET;
+
+if (!influxUrl || !influxToken || !influxOrg || !influxBucket) {
+  console.error("InfluxDB environment variables are not fully set. Check INFLUXDB_URL, DOCKER_INFLUXDB_INIT_ADMIN_TOKEN, DOCKER_INFLUXDB_INIT_ORG, DOCKER_INFLUXDB_INIT_BUCKET.");
+} else {
+  console.log(`InfluxDB configured with URL: ${influxUrl}, Org: ${influxOrg}, Bucket: ${influxBucket}`);
 }
 
-// Multer configuration for file uploadsß
+const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
+const queryApi = influxDB.getQueryApi(influxOrg);
+
+// --- Multer and File Setup ---
+const containerUploadDirForMulter = process.env.CONTAINER_UPLOADS_DIR;
+console.log("Multer upload directory (inside web container): " + containerUploadDirForMulter);
+
+if (!containerUploadDirForMulter) {
+  console.error("CONTAINER_UPLOADS_DIR environment variable is not set. This is required for Multer.");
+} else if (!fs.existsSync(containerUploadDirForMulter)) {
+  try {
+    fs.mkdirSync(containerUploadDirForMulter, { recursive: true });
+    console.log(`Created Multer upload directory: ${containerUploadDirForMulter}`);
+  } catch (e) {
+    console.error(`Error creating Multer upload directory ${containerUploadDirForMulter}:`, e);
+  }
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // The uploadDir should already exist, but double-check
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(containerUploadDirForMulter)) {
+      fs.mkdirSync(containerUploadDirForMulter, { recursive: true });
     }
-    cb(null, uploadDir);
+    cb(null, containerUploadDirForMulter);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
-
 const upload = multer({ storage });
 
-app.use(express.json()); // Middleware to parse JSON bodies
-app.use('/uploads', express.static(uploadDir)); // Serve uploaded files statically from /app/uploads
-app.use('/results', express.static(path.join('/usr/share/nginx/html/results'))); // Serve results statically
+app.use(express.json());
+app.use('/uploads', express.static(containerUploadDirForMulter));
+app.use('/results', express.static(process.env.CONTAINER_RESULTS_DIR));
 
-// API endpoint for file uploads
+// --- API Endpoints ---
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  // req.file.filename is just the filename, e.g., file-123.html
-  // The client will request it via /uploads/file-123.html
   res.json({ filePath: `/uploads/${req.file.filename}` });
 });
 
-// API endpoint to run Sitespeed.io test
 app.post('/api/run-test', async (req, res) => {
   const { url, browser, iterations, additionalOptions = [] } = req.body;
 
@@ -57,121 +72,284 @@ app.post('/api/run-test', async (req, res) => {
   }
 
   let sitespeedUrl = url;
-  // If the URL is an uploaded file, convert it to a file path for Sitespeed.io
   if (url.startsWith('/uploads/')) {
     const filename = path.basename(url);
-    // This path needs to be accessible *inside* the sitespeedio container
-    // We mount the web container's /app/uploads to /app/uploads in the sitespeedio container
     sitespeedUrl = `file:///app/uploads/${filename}`;
   }
 
-  // Path to the Sitespeed.io config file inside the 'web' container (copied by Dockerfile)
-  const webContainerConfigPath = process.env.CONFIG_FILE; // e.g. /app/sitespeed-config.json
-  // Path where the config file will be mounted inside the 'sitespeedio' container
-  const sitespeedContainerConfigPath = '/tmp/sitespeed-config.json'; // Arbitrary path inside sitespeedio container
-
-  // Construct the string for additional options from the UI
-  // Ensure options are passed correctly, e.g. as "--option" or "--option=value"
+  const hostSitespeedConfigPath = process.env.HOST_SITESPEED_CONFIG_PATH;
+  const sitespeedContainerConfigTarget = '/tmp/sitespeed-config.json';
   const optionsString = additionalOptions.map(opt => `${opt}`).join(' ');
+  const hostResultsPath = process.env.HOST_RESULTS_DIR;
+  const sitespeedOutputMountTarget = '/sitespeed.io';
+  const hostUploadsPath = process.env.HOST_UPLOADS_DIR;
+  const sitespeedUploadsMountTarget = '/app/uploads';
 
-  // Base directory for Sitespeed.io results, as seen from the 'web' container and Nginx
-  const resultsBaseDirInWebContainer = '/usr/share/nginx/html/results';
-  // Path where Sitespeed.io container will write its output
-  const sitespeedOutputMountPath = '/sitespeed.io';
-  const hostResultDir = process.env.RESULTS_DIR;
-  // Path to the uploads directory in the 'web' container
-  const uploadsDirInWebContainer = uploadDir; // e.g., /app/uploads
-  // Path where the uploads directory will be mounted in the 'sitespeedio' container
-  const sitespeedUploadsMountPath = '/app/uploads';
+  if (!hostSitespeedConfigPath || !hostResultsPath || !hostUploadsPath) {
+    console.error("Host path environment variables (HOST_SITESPEED_CONFIG_PATH, HOST_RESULTS_DIR, HOST_UPLOADS_DIR) are not fully set.");
+    return res.status(500).json({ error: "Server configuration error: Host paths not set." });
+  }
 
+  const testRunId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 
-  // Construct the Docker command for Sitespeed.io
+  const sitespeedRunIdEnvVar = `-e SITESPEED_TEST_RUN_ID=${testRunId}`;
+
   const dockerCommand = `
     docker run --rm \
     --network sitespeed-net \
-    -v ${hostResultDir}:${sitespeedOutputMountPath} \
-    -v ${uploadsDirInWebContainer}:${sitespeedUploadsMountPath}:ro \
-    -v ${webContainerConfigPath}:${sitespeedContainerConfigPath}:ro \
+    ${sitespeedRunIdEnvVar} \
+    -v "${hostResultsPath}":${sitespeedOutputMountTarget} \
+    -v "${hostUploadsPath}":${sitespeedUploadsMountTarget}:ro \
+    -v "${hostSitespeedConfigPath}":${sitespeedContainerConfigTarget}:ro \
     my-sitespeedio \
-    --config ${sitespeedContainerConfigPath} \
+    --config ${sitespeedContainerConfigTarget} \
+    --outputFolder ${testRunId} \
     --browser ${browser || 'chrome'} \
     -n ${iterations || 1} \
     ${optionsString} \
     "${sitespeedUrl}"
   `;
-  // Note: browser and iterations from req.body will override values in sitespeed-config.json
-  // Default to 'chrome' and 1 iteration if not provided in the request.
 
   console.log('Executing Sitespeed.io command:', dockerCommand);
 
   try {
-    // Execute the Sitespeed.io Docker command
-    // Increased maxBuffer to handle potentially large console output from Sitespeed.io
-    const testProcess = exec(dockerCommand, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+    const testProcess = exec(dockerCommand, { maxBuffer: 1024 * 1024 * 10 });
+    let output = '';
+    testProcess.stdout.on('data', (data) => { output += data; console.log('Sitespeed stdout:', data.toString()); });
+    testProcess.stderr.on('data', (data) => { output += data; console.error('Sitespeed stderr:', data.toString()); });
 
-    let output = ''; // To accumulate stdout and stderr
-    testProcess.stdout.on('data', (data) => {
-      output += data;
-      console.log('Sitespeed stdout:', data.toString()); // Log to server console
-    });
-    testProcess.stderr.on('data', (data) => {
-      output += data;
-      console.error('Sitespeed stderr:', data.toString()); // Log to server console
-    });
-
-    // Handle process completion
     testProcess.on('close', (code) => {
       console.log(`Sitespeed.io process exited with code ${code}`);
       if (code === 0) {
-        // Successfully completed
-        // Find the latest result directory created by Sitespeed.io
-        // Sitespeed.io creates directories named after the domain and timestamp
-        // The resultsBaseDirInWebContainer is where Nginx serves from and where Sitespeed.io writes (via volume mount)
-        const resultDirs = fs.readdirSync(resultsBaseDirInWebContainer)
-          .map(name => path.join(resultsBaseDirInWebContainer, name))
-          .filter(source => fs.lstatSync(source).isDirectory())
-          .sort((a, b) => fs.statSync(b).mtime.getTime() - fs.statSync(a).mtime.getTime());
-
-
-        const latestDirName = resultDirs.length > 0 ? path.basename(resultDirs[0]) : null;
-        const resultUrl = latestDirName ? `/results/${latestDirName}/index.html` : null;
-
+        const resultUrl = `/results/${testRunId}/index.html`;
+        console.log("Test successful. Result URL (relative to Nginx):", resultUrl);
         res.json({
           status: 'success',
           output,
-          resultUrl
+          resultUrl,
+          testId: testRunId
         });
       } else {
-        // Test failed
         res.status(500).json({
           status: 'error',
           error: `Test failed with exit code ${code}. Check server logs for Sitespeed.io output.`,
-          output // Include the output in the error response for client-side display
+          output
         });
       }
     });
-
     testProcess.on('error', (err) => {
-        console.error('Failed to start Sitespeed.io process:', err);
-        res.status(500).json({
-            status: 'error',
-            error: `Failed to start Sitespeed.io process: ${err.message}`,
-            output: output // Include any output gathered so far
-        });
+      console.error('Failed to start Sitespeed.io process:', err);
+      res.status(500).json({ status: 'error', error: `Failed to start Sitespeed.io process: ${err.message}`, output });
     });
-
   } catch (error) {
     console.error('Error executing Sitespeed.io command:', error);
-    res.status(500).json({
-      status: 'error',
-      error: error.message
-    });
+    res.status(500).json({ status: 'error', error: error.message });
   }
 });
 
+// GET /api/tests - List all test runs (summary)
+app.get('/api/tests', async (req, res) => {
+  // This query relies on 'test_id' tag being present from sitespeed-config.json
+  // and SITESPEED_TEST_RUN_ID environment variable.
+  const fluxQuery = `
+    from(bucket: "${influxBucket}")
+      |> range(start: -90d)
+      |> filter(fn: (r) => exists r.test_id)
+      |> group(columns: ["test_id"])
+      |> sort(columns: ["_time"], desc: true)
+      |> first()  // Apply first while _value is still available
+      |> keep(columns: ["_time", "test_id", "url", "browser"])
+      |> rename(columns: {_time: "timestamp", test_id: "id"})
+      |> group()
+      |> sort(columns: ["timestamp"], desc: true)
+      |> yield(name: "test_runs_summary")
+`;
+
+
+
+  console.log("Executing InfluxDB query for /api/tests:", fluxQuery);
+  const tests = [];
+  try {
+    for await (const { values, tableMeta } of queryApi.iterateRows(fluxQuery)) {
+      const o = tableMeta.toObject(values);
+      // Ensure all expected fields are present before pushing
+      if (o.id && o.timestamp) { // url and browser might be optional or N/A
+        tests.push({
+          id: o.id,
+          url: o.url || 'N/A', // Provide a default if URL is not tagged/present
+          timestamp: o.timestamp,
+          browser: o.browser || 'N/A' // Provide a default if browser is not tagged/present
+        });
+      } else {
+        console.warn("Skipping a record in /api/tests due to missing id or timestamp:", o);
+      }
+    }
+    if (tests.length === 0) {
+      console.warn("/api/tests query returned no results. Verify that 'browsertime_pageSummary' measurements with a 'test_id' tag exist in InfluxDB within the queried range and that 'url' and 'browser' tags are present if expected.");
+    }
+    res.json(tests);
+  } catch (error) {
+    console.error('Error querying InfluxDB for test list:', error);
+    res.status(500).json({ error: 'Failed to fetch test list from InfluxDB', details: error.message });
+  }
+});
+
+// GET /api/tests/:id - Get detailed metrics for a specific test run
+app.get('/api/tests/:id', async (req, res) => {
+  const testId = req.params.id;
+
+  const all_metrics_query = `
+  import "influxdata/influxdb/v1"
+
+  // Search all known measurements individually
+  union(tables: [
+    ${[
+      "pageLoadTime",
+      "firstContentfulPaint",
+      "SpeedIndex",
+      "fullyLoaded",
+      "cumulativeLayoutShift",
+      "firstInputDelay",
+      "totalBlockingTime",
+      "domInteractive",
+      "connect",
+      "ttfb",
+      "transferSize",
+      // add more as needed from your list
+    ]
+      .map(
+        (m) => `
+    from(bucket: "${influxBucket}")
+      |> range(start: -90d)
+      |> filter(fn: (r) => r._measurement == "${m}" and r.test_id == "${testId}")
+      |> sort(columns: ["_time"], desc: false)`
+      )
+      .join(",\n")}
+  ])
+  |> yield(name: "test_details")
+`;
+
+
+  console.log(`Executing InfluxDB query for /api/tests/${testId}:`, all_metrics_query);
+  const rawData = [];
+
+  try {
+    for await (const { values, tableMeta } of queryApi.iterateRows(all_metrics_query)) {
+      rawData.push(tableMeta.toObject(values));
+    }
+
+    if (rawData.length === 0)
+      return res.status(404).json({ error: 'Test data not found for ID: ' + testId });
+
+    const result = {
+      id: testId,
+      timestamp: null,
+      url: null,
+      browser: null,
+      iterations: null,
+      metrics: {},
+      pagexray: { contentTypes: [], totalRequests: 0, totalSize: 0 },
+      lighthouse: {}
+    };
+
+    // Pick one row from browsertime to extract metadata
+    const browsertimeBase = rawData.find(
+      r => r.test_id === testId
+    );
+
+    if (browsertimeBase) {
+      result.timestamp = browsertimeBase._time;
+      result.url = browsertimeBase.group || null;
+      result.browser = browsertimeBase.browser || null;
+      result.iterations = browsertimeBase.iterations || null;
+    }
+
+    rawData.forEach(r => {
+      if (!r._measurement || !r._field) return;
+    
+      if (!result.metrics[r._measurement]) {
+        result.metrics[r._measurement] = {};
+      }
+    
+      result.metrics[r._measurement][r._field] = r._value;
+    });
+    
+
+    result.pagexray.contentTypes = result.pagexray.contentTypes.filter(ct =>
+      ct.type && (ct.requests > 0 || ct.transferSize > 0)
+    );
+
+    if (
+      result.metrics &&
+      result.metrics.visualMetrics &&
+      typeof result.metrics.visualMetrics === 'string'
+    ) {
+      try {
+        result.metrics.visualMetrics = JSON.parse(result.metrics.visualMetrics);
+      } catch (e) {
+        console.warn("Could not parse visualMetrics JSON for test " + testId, e);
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error(`Error querying InfluxDB for test ${testId}:`, error);
+    res.status(500).json({ error: 'Failed to fetch test details', details: error.message });
+  }
+});
+
+
+// GET /api/tests/compare?id=1&id=2&id=3
+app.get('/api/tests/compare', async (req, res) => {
+  const ids = req.query.id;
+  const testIds = Array.isArray(ids) ? ids : [ids].filter(id => id);
+  if (!testIds || testIds.length === 0) return res.status(400).json({ error: 'No test IDs provided.' });
+
+  const idFilters = testIds.map(id => `r.test_id == "${id}"`).join(" or ");
+  const fluxQuery = `
+    from(bucket: "${influxBucket}")
+        |> range(start: -90d)
+        |> filter(fn: (r) => ${idFilters}) // e.g., (r.test_id == "abc" or r.test_id == "xyz")
+        |> filter(fn: (r) => exists r.test_id and r._measurement == "browsertime") // <-- use actual measurement name if "browsertime_pageSummary" is not found
+        |> keep(columns: ["_time", "_field", "_value", "url", "test_id", "browser"])
+        |> yield(name: "comparison_data")
+`;
+
+  console.log("Executing InfluxDB query for /api/tests/compare:", fluxQuery);
+  const rawData = [];
+  try {
+    for await (const { values, tableMeta } of queryApi.iterateRows(fluxQuery)) {
+      rawData.push(tableMeta.toObject(values));
+    }
+    const groupedByTestId = rawData.reduce((acc, curr) => {
+      const id = curr.test_id;
+      if (!acc[id]) {
+        acc[id] = {
+          id: id,
+          url: curr.url,
+          timestamp: curr._time,
+          browser: curr.browser || 'N/A', // Default if browser tag is missing
+          metrics: {}
+        };
+      }
+      // This logic assumes all points for a given test_id in browsertime_pageSummary share the same _time, url, browser.
+      // If multiple _time values exist for the same test_id, this might pick one arbitrarily for the top-level timestamp.
+      // The `first()` in the /api/tests query is meant to give a single representative _time.
+      acc[id].metrics[curr._field] = curr._value;
+      return acc;
+    }, {});
+    res.json(Object.values(groupedByTestId));
+  } catch (error) {
+    console.error('Error querying InfluxDB for test comparison:', error);
+    res.status(500).json({ error: 'Failed to fetch comparison data', details: error.message });
+  }
+});
+
+// --- Server Initialization ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Upload directory: ${uploadDir}`);
-  console.log(`Results served from: /usr/share/nginx/html/results`);
+  console.log(`Uploads (inside web container) handled by Multer at: ${containerUploadDirForMulter}`);
+  console.log(`Results (inside web container) served by Nginx from: ${process.env.CONTAINER_RESULTS_DIR}`);
+  console.log(`Host config for Sitespeed.io: ${process.env.HOST_SITESPEED_CONFIG_PATH}`);
 });

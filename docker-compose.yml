@@ -1,3 +1,5 @@
+# docker-compose.yml
+version: '3.8'
 
 services:
   influxdb:
@@ -15,10 +17,11 @@ services:
       - DOCKER_INFLUXDB_INIT_BUCKET=mysitespeed
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mytoken
     networks:
+      # Connects to the network named 'sitespeed-net'
       - sitespeed-net
 
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:9.5.16 # Consider updating to a newer stable version
     container_name: grafana
     ports:
       - "3000:3000"
@@ -27,26 +30,50 @@ services:
     depends_on:
       - influxdb
     networks:
+      # Connects to the network named 'sitespeed-net'
       - sitespeed-net
 
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
+    container_name: web-app
     ports:
       - "8080:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${UPLOADS_DIR}:/app/uploads
       - ${RESULTS_DIR}:/usr/share/nginx/html/results
+      - ${CONFIG_FILE}:/app/sitespeed-config.json:ro
     depends_on:
       - influxdb
-      - grafana
+    networks:
+      # Connects to the network named 'sitespeed-net'
+      - sitespeed-net
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-3000}
+
+      - CONTAINER_UPLOADS_DIR=/app/uploads
+      - CONTAINER_RESULTS_DIR=/usr/share/nginx/html/results
+      - CONTAINER_SITESPEED_CONFIG_PATH=/app/sitespeed-config.json
+
+      - HOST_UPLOADS_DIR=${UPLOADS_DIR}
+      - HOST_RESULTS_DIR=${RESULTS_DIR}
+      - HOST_SITESPEED_CONFIG_PATH=${CONFIG_FILE}
+
+      - INFLUXDB_URL=${INFLUXDB_URL:-http://influxdb:8086}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-mytoken}
+      - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG:-myorg}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-mysitespeed}
 
 volumes:
   influxdb-data:
   grafana-data:
 
 networks:
+  # Define the network and explicitly name it 'sitespeed-net'
   sitespeed-net:
+    name: sitespeed-net # This ensures the network is created with this exact name
+    driver: bridge
     external: true

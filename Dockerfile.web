@@ -1,58 +1,75 @@
-# Base Nginx image
+# Dockerfile.web
+# Base image: Nginx on Alpine Linux for a lightweight web server
 FROM nginx:alpine
 
-# Install Node.js, npm, and Docker CLI
+# Install necessary packages:
+# - nodejs and npm: For running the Node.js backend server.
+# - docker-cli: Allows the Node.js server to execute 'docker run' commands for Sitespeed.io.
+# - git: Sometimes required as a dependency for certain npm packages during installation.
 # hadolint ignore=DL3018
-RUN apk add --no-cache nodejs npm docker-cli
+RUN apk add --no-cache nodejs npm docker-cli git
 
-# Set working directory for the Node.js application
+# Set the working directory for the Node.js application inside the container.
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if they exist)
-# These files define your Node.js dependencies.
+# Copy package.json and package-lock.json (if it exists).
+# These files define the Node.js project's dependencies.
 COPY package*.json ./
+
+# Install Node.js dependencies.
+# This command installs packages listed in package.json.
+# It's crucial to have '@influxdata/influxdb-client' listed in your package.json
+# or install it explicitly here.
+# Using --omit=dev to skip development-only dependencies, keeping the image smaller.
+RUN npm install --omit=dev @influxdata/influxdb-client express multer dotenv
+# If you manage dependencies strictly via package.json, ensure it's updated and then use:
+# RUN npm install --omit=dev
+
+# Copy the Sitespeed.io configuration file for the Node.js backend to reference.
 COPY sitespeed-config.json /app/sitespeed-config.json
 
-# Install Node.js dependencies for your server.js
-# Using --omit=dev to skip development dependencies in the final image
-RUN npm install --omit=dev
-# Copy your Node.js backend server code
+# Copy the .env file (if used for environment variables for the Node.js app).
 COPY .env .
+
+# Copy the Node.js backend server code.
 COPY server.js .
-# If you have other .js files or modules for your backend, copy them too. E.g.:
+# If you have other custom Node.js modules (e.g., in a 'lib' folder), copy them too:
 # COPY ./lib /app/lib
 
 # --- Nginx and Frontend Setup ---
 
-# Copy static frontend files to Nginx's serving directory
+# Copy static frontend files to Nginx's default HTML serving directory.
+# This includes the main testing page and the new results page.
 COPY index.html /usr/share/nginx/html/
 COPY style.css /usr/share/nginx/html/
 COPY script.js /usr/share/nginx/html/
+COPY results.html /usr/share/nginx/html/results.html
+COPY results_script.js /usr/share/nginx/html/results_script.js
 COPY images/ /usr/share/nginx/html/images/
 
-# Create directories for uploads (used by Node.js/Multer) and results (used by Sitespeed.io)
-# The actual data will be on volumes, but the directories should exist in the container.
+# Create directories that will be used for volume mounts:
+# - /app/uploads: Where the Node.js/Multer saves uploaded files (mounted from host).
+# - /usr/share/nginx/html/results: Where Sitespeed.io results are written (mounted from host)
+#   and served by Nginx.
 RUN mkdir -p /app/uploads && \
     mkdir -p /usr/share/nginx/html/results
-    # Permissions:
-    # The 'chown' commands you had:
-    # chown -R nginx:nginx /app/uploads
-    # chown -R nginx:nginx /usr/share/nginx/html/results
-    # - /app/uploads: Written to by your Node.js app. If Node runs as root (default without further config),
-    #   it can write here. If it runs as 'node' user, it might need permissions.
-    # - /usr/share/nginx/html/results: Written to by the Sitespeed.io container (likely as root within that container)
-    #   via a volume. Nginx (running as 'nginx' user) primarily needs to read from here.
-    # For simplicity now, ensure the directories are created. The processes writing to them
-    # (Node app, Sitespeed.io container) will use their own UIDs, which will reflect on the host volume.
-    # Nginx (as 'nginx' user) should typically have read access to /usr/share/nginx/html/results.
+    # Permissions: These directories will be written to by processes that might run as different users.
+    # The Node.js app (potentially root or node user in this container) writes to /app/uploads.
+    # The Sitespeed.io container (likely root within its own container) writes to the volume mapped to /usr/share/nginx/html/results.
+    # Nginx (running as 'nginx' user in this container) needs to read from /usr/share/nginx/html/results.
+    # Docker volume permissions handle most of this, but ensuring directories exist is good practice.
 
-# Copy your custom Nginx configuration
+# Copy your custom Nginx configuration file.
+# This file defines how Nginx handles requests, including proxying to the Node.js backend.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port 80 for Nginx
+# Expose port 80, which is the default port Nginx listens on.
+# This port will be mapped to a host port in docker-compose.yml.
 EXPOSE 80
 
-# Command to start the Node.js application (in the background)
-# and Nginx (in the foreground)
-# Note: server.js listens on port 3000, which Nginx proxies to.
+# Command to start both the Node.js application and Nginx.
+# - 'node /app/server.js &': Starts the Node.js server in the background.
+#   The server.js listens on an internal port (e.g., 3000), which Nginx proxies to.
+# - 'nginx -g 'daemon off;'': Starts Nginx in the foreground. This is important because
+#   a Docker container exits when its main foreground process stops.
 CMD sh -c "node /app/server.js & nginx -g 'daemon off;'"
