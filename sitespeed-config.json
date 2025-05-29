@@ -1,7 +1,10 @@
 {
     "browsertime": {
         "iterations": 1,
-        "browser": "chrome"
+        "browser": "chrome",
+        "videoParams": {
+            "addTimer": true
+        }
     },
     "plugins": {
         "add": [
@@ -16,5 +19,12 @@
         "version": 2,
         "organisation": "myorg",
         "token": "mytoken"
+    },
+    "metrics": {
+        "add": {
+            "coach": {
+                "allAdvice": true
+            }
+        }
     }
 }
