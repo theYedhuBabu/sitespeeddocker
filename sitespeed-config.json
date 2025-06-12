@@ -8,7 +8,8 @@
     },
     "plugins": {
         "add": [
-            "@sitespeed.io/plugin-influxdb"
+            "@sitespeed.io/plugin-influxdb",
+            "analysisstorer"
         ]
     },
     "influxdb": {
@@ -19,12 +20,5 @@
         "version": 2,
         "organisation": "myorg",
         "token": "mytoken"
-    },
-    "metrics": {
-        "add": {
-            "coach": {
-                "allAdvice": true
-            }
-        }
     }
 }

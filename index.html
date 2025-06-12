@@ -57,13 +57,13 @@
 
             <div>
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Additional Options</h2>
-                <p class="text-sm text-gray-600 mb-4">Enter sitespeed.io options as key=value pairs (e.g.,
-                    `--viewPort=1366x768`, `--connectivity=cable`). Ensure options start with '--'. Leave blank if not needed.</p> <div id="additionalOptionsContainer" class="space-y-3"> </div>
+                <div id="additionalOptionsContainer" class="space-y-4">
+                    </div>
                 <button type="button" id="addOptionButton"
-                        class="mt-4 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                        class="mt-4 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     Add Option
                 </button>
-                <span id="optionCount" class="ml-2 text-sm text-gray-600">(0/20 added)</span> </div>
+            </div>
 
 
             <div>
@@ -76,7 +76,8 @@
 
         <div id="results" class="mt-6 p-4 bg-gray-50 rounded-md hidden">
             <h3 class="text-lg font-medium text-gray-800 mb-2">Test Results/Status:</h3>
-            <div id="resultsContent" class="text-sm text-gray-700 whitespace-pre-wrap"></div> </div>
+            <div id="resultsContent" class="text-sm text-gray-700 whitespace-pre-wrap"></div>
+        </div>
 
     </div>
 
