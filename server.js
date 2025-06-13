@@ -56,11 +56,14 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 app.post('/api/run-test', async (req, res) => {
   const { url, browser, iterations, additionalOptions = [] } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL is required' });
+  console.log(req.body)
+  if (typeof url !== 'string' || url.trim() === '') {
+    return res.status(400).json({ error: 'URL must be a non-empty string' });
+  }
 
   let sitespeedUrl = url;
   if (url.startsWith('/uploads/')) {
-    sitespeedUrl = `/app/uploads/${path.basename(url)}`;
+    sitespeedUrl = `--multi "/app/uploads/${path.basename(url)}"`;
   }
 
   const hostSitespeedConfigPath = process.env.HOST_SITESPEED_CONFIG_PATH;
@@ -92,7 +95,7 @@ app.post('/api/run-test', async (req, res) => {
     --browser ${browser || 'chrome'} \
     -n ${iterations || 1} \
     ${optionsString} \
-    "${sitespeedUrl}"
+    ${sitespeedUrl}
   `;
   console.log('Executing Sitespeed.io command:', dockerCommand);
   try {

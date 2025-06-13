@@ -809,4 +809,15 @@ function generateAndDownloadHtmlReport(pageData) {
 // --- Initial Load ---
 document.addEventListener('DOMContentLoaded', () => {
     fetchTestRuns(); 
+    // ---- NEW ----
+    // Check for a testId in the URL and open its details automatically
+    const params = new URLSearchParams(window.location.search);
+    const testIdFromUrl = params.get('testId');
+    if (testIdFromUrl) {
+        // Use a short timeout to ensure the main test list has had a moment to start fetching,
+        // although viewTestDetails is independent.
+        setTimeout(() => {
+            viewTestDetails(testIdFromUrl);
+        }, 2000);
+    }
 });
