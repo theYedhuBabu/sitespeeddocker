@@ -310,7 +310,7 @@ app.get('/api/tests/:id', async (req, res) => {
 });
 
 app.get('/report', (req, res) => {
-  res.sendFile(path.join(__dirname, 'detailed-report.html'));
+    res.sendFile(path.join(__dirname, 'detailed-report.html'));
 });
 app.get('/api/tests/compare', async (req, res) => {
   const ids = req.query.id;
