@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 require('dotenv').config();
-const { InfluxDB, flux } = require('@influxdata/influxdb-client');
+const { InfluxDB, Point, flux } = require('@influxdata/influxdb-client');
 
 const app = express();
 
@@ -22,6 +22,7 @@ if (!influxUrl || !influxToken || !influxOrg || !influxBucket) {
 
 const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
 const queryApi = influxDB.getQueryApi(influxOrg);
+const writeApi = influxDB.getWriteApi(influxOrg, influxBucket);
 
 // --- Multer and File Setup ---
 const containerUploadDirForMulter = process.env.CONTAINER_UPLOADS_DIR;
@@ -106,6 +107,7 @@ app.post('/api/run-test', async (req, res) => {
     testProcess.on('close', (code) => {
       console.log(`Sitespeed.io process exited with code ${code}`);
       if (code === 0) {
+        processAndStoreDetailedResults(testRunId, browser);
         res.json({ status: 'success', output: procOutput, resultUrl: `/results/${testRunId}/index.html`, testId: testRunId });
       } else {
         res.status(500).json({ status: 'error', error: `Test failed. Exit code: ${code}`, output: procOutput });
@@ -121,10 +123,95 @@ app.post('/api/run-test', async (req, res) => {
   }
 });
 
+async function processAndStoreDetailedResults(testRunId, browser) {
+    const resultsPath = path.join(process.env.CONTAINER_RESULTS_DIR, testRunId);
+    const pagesPath = path.join(resultsPath, 'pages');
+
+    try {
+        const pageFolders = fs.readdirSync(pagesPath);
+
+        for (const pageFolder of pageFolders) {
+            const pageFolderPath = path.join(pagesPath, pageFolder);
+            const dataPath = path.join(pageFolderPath, 'data');
+
+            if (fs.existsSync(dataPath)) {
+                const browsertimePath = path.join(dataPath, 'browsertime.run-1.json');
+                const coachPath = path.join(dataPath, 'coach.run-1.json');
+
+                // Process Visual Metrics from browsertime.run-1.json
+                if (fs.existsSync(browsertimePath)) {
+                    const browsertimeData = JSON.parse(fs.readFileSync(browsertimePath, 'utf8'));
+                    const visualMetrics = browsertimeData.visualMetrics;
+                    const url = browsertimeData.pageinfo?.url || browsertimeData.url;
+
+                    if (!url) {
+                        console.error(`Could not determine URL from browsertime.run-1.json for test: ${testRunId}`);
+                        continue;
+                    }
+
+
+                    for (const metricName in visualMetrics) {
+                        if (typeof visualMetrics[metricName] === 'number') {
+                            const point = new Point('visualMetrics')
+                                .tag('test_id', testRunId)
+                                .tag('url', url)
+                                .tag('browser', browser)
+                                .tag('metricName', metricName)
+                                .floatField('value', visualMetrics[metricName]);
+                            writeApi.writePoint(point);
+                        }
+                    }
+                     // Media Assets
+                    const videoPath = path.join('pages', pageFolder, 'data', 'video', '1.mp4');
+                    const lcpScreenshotPath = path.join('pages', pageFolder, 'data', 'screenshots', '1', 'largestContentfulPaint.png');
+
+                    const mediaPoint = new Point('media_assets')
+                        .tag('test_id', testRunId)
+                        .tag('url', url)
+                        .stringField('video_path', videoPath)
+                        .stringField('lcp_screenshot_path', lcpScreenshotPath);
+                    writeApi.writePoint(mediaPoint);
+                }
+
+
+                // Process Coach Advice from coach.run-1.json
+                if (fs.existsSync(coachPath)) {
+                    const coachData = JSON.parse(fs.readFileSync(coachPath, 'utf8'));
+                    const adviceList = coachData.advice.adviceList;
+                     const url = coachData.url;
+
+                    if (!url) {
+                        console.error(`Could not determine URL from coach.run-1.json for test: ${testRunId}`);
+                        continue;
+                    }
+
+                    for (const adviceId in adviceList) {
+                        const advice = adviceList[adviceId];
+                        const point = new Point('coach_advice')
+                            .tag('test_id', testRunId)
+                            .tag('url', url)
+                            .tag('adviceId', adviceId)
+                            .intField('score', advice.score)
+                            .stringField('title', advice.title)
+                            .stringField('description', advice.description);
+                        writeApi.writePoint(point);
+                    }
+                }
+            }
+        }
+        await writeApi.flush();
+        console.log(`Successfully processed and stored detailed results for test run: ${testRunId}`);
+    } catch (error) {
+        console.error(`Error processing detailed results for test run ${testRunId}:`, error);
+    }
+}
+
+
 app.get('/api/tests', async (req, res) => {
   const fluxQuery = `
     from(bucket: "${influxBucket}")
       |> range(start: -90d)
+      |> filter(fn: (r) => r._measurement == "pageLoadTime")
       |> filter(fn: (r) => exists r.test_id)
       |> group(columns: ["test_id"])
       |> sort(columns: ["_time"], desc: true)
@@ -171,9 +258,10 @@ app.get('/api/tests/:id', async (req, res) => {
       // No specific measurement or field filters here; get everything for this test_id
       // Keep all relevant columns that might be needed by the frontend
       |> keep(columns: [
-          "_time", "_start", "_stop", "_measurement", "_field", "_value", 
-          "test_id", "url", "browser", "group", "iterations", "origin", 
-          "summaryType", "contentType", "status", "contentSize", "transferSize" 
+          "_time", "_start", "_stop", "_measurement", "_field", "_value",
+          "test_id", "url", "browser", "group", "iterations", "origin",
+          "summaryType", "contentType", "status", "contentSize", "transferSize",
+          "metricName", "adviceId", "score", "title", "description", "video_path", "lcp_screenshot_path"
           // Add any other potentially relevant tags or fields you might have
       ])
       |> yield(name: "all_test_data")
@@ -195,7 +283,7 @@ app.get('/api/tests/:id', async (req, res) => {
       // However, if testId itself is invalid, a 404 might be appropriate earlier.
       // For now, sending empty array.
     }
-    
+
     // --- START: Output allRecords object to JSON file for debugging ---
     // const debugOutputDir = path.join(__dirname, 'debug_output');
     // if (!fs.existsSync(debugOutputDir)) {
@@ -216,12 +304,14 @@ app.get('/api/tests/:id', async (req, res) => {
 
   } catch (error) {
     console.error(`Error in /api/tests/${testId} endpoint querying InfluxDB:`, error.message);
-    console.error("Full Error Object:", error); 
+    console.error("Full Error Object:", error);
     res.status(500).json({ error: 'Failed to fetch raw test data due to a server error.', details: error.message });
   }
 });
 
-
+app.get('/report', (req, res) => {
+  res.sendFile(path.join(__dirname, 'detailed-report.html'));
+});
 app.get('/api/tests/compare', async (req, res) => {
   const ids = req.query.id;
   const testIds = Array.isArray(ids) ? ids : [ids].filter(id => id);
@@ -233,18 +323,18 @@ app.get('/api/tests/compare', async (req, res) => {
     from(bucket: "${influxBucket}")
       |> range(start: -90d)
       |> filter(fn: (r) => ${idFilters})
-      |> filter(fn: (r) => r._measurement == "firstContentfulPaint" or 
+      |> filter(fn: (r) => r._measurement == "firstContentfulPaint" or
                            r._measurement == "largestContentfulPaint" or
                            r._measurement == "SpeedIndex" or
                            r._measurement == "pageLoadTime" or
-                           r._measurement == "transferSize" 
+                           r._measurement == "transferSize"
                            )
-      |> filter(fn: (r) => r._field == "value" or r._field == "mean" or r._field == "median") 
-      |> group(columns: ["test_id", "_measurement"]) 
+      |> filter(fn: (r) => r._field == "value" or r._field == "mean" or r._field == "median")
+      |> group(columns: ["test_id", "_measurement"])
       |> sort(columns: ["_time"], desc: false)
-      |> first() 
+      |> first()
       |> keep(columns: ["_time", "_measurement", "_value", "url", "test_id", "browser", "group"])
-      |> group() 
+      |> group()
       |> yield(name: "comparison_data")
   `;
 
@@ -269,12 +359,12 @@ app.get('/api/tests/compare', async (req, res) => {
       let metricKey = curr._measurement;
       if (metricKey === "SpeedIndex") metricKey = "speedIndex";
       else if (metricKey === "transferSize") metricKey = "totalPageSize";
-      
+
       acc[id].metrics[metricKey] = parseFloat(curr._value) || curr._value;
-      
+
       if (curr.url || curr.group) acc[id].url = curr.url || curr.group;
       if (curr.browser) acc[id].browser = curr.browser;
-      if (curr._time) acc[id].timestamp = curr._time; 
+      if (curr._time) acc[id].timestamp = curr._time;
 
       return acc;
     }, {});

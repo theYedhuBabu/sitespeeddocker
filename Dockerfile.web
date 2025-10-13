@@ -46,6 +46,9 @@ COPY script.js /usr/share/nginx/html/
 COPY results.html /usr/share/nginx/html/results.html
 COPY results_script.js /usr/share/nginx/html/results_script.js
 COPY images/ /usr/share/nginx/html/images/
+COPY detailed-report.js /usr/share/nginx/html/detailed-report.js
+COPY detailed-report.css /usr/share/nginx/html/detailed-report.css
+COPY detailed-report.html /usr/share/nginx/html/detailed-report.html
 
 # Create directories that will be used for volume mounts:
 # - /app/uploads: Where the Node.js/Multer saves uploaded files (mounted from host).
