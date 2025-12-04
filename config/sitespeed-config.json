@@ -1,0 +1,23 @@
+{
+    "browsertime": {
+        "iterations": 1,
+        "browser": "chrome",
+        "videoParams": {
+            "addTimer": true
+        }
+    },
+    "plugins": {
+        "add": [
+            "analysisstorer"
+        ]
+    },
+    "influxdb": {
+        "protocol": "http",
+        "host": "influxdb",
+        "port": 8086,
+        "database": "mysitespeed",
+        "version": 2,
+        "organisation": "myorg",
+        "token": "mytoken"
+    }
+}

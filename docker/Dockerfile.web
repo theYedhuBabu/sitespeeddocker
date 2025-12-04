@@ -1,0 +1,58 @@
+# Dockerfile.web
+# Base image: Nginx on Alpine Linux for a lightweight web server
+FROM nginx:alpine
+
+# Install necessary packages:
+# - nodejs and npm: For running the Node.js backend server.
+# - docker-cli: Allows the Node.js server to execute 'docker run' commands for Sitespeed.io.
+# - git: Sometimes required as a dependency for certain npm packages during installation.
+# hadolint ignore=DL3018
+RUN apk add --no-cache nodejs npm docker-cli git
+
+# Set the working directory for the Node.js application inside the container.
+WORKDIR /app
+
+# Copy package.json and package-lock.json (if it exists).
+# These files define the Node.js project's dependencies.
+COPY package*.json ./
+
+# Install Node.js dependencies.
+# This command installs packages listed in package.json.
+# It's crucial to have '@influxdata/influxdb-client' listed in your package.json
+# or install it explicitly here.
+# Using --omit=dev to skip development-only dependencies, keeping the image smaller.
+RUN npm install --omit=dev @influxdata/influxdb-client express multer dotenv
+# If you manage dependencies strictly via package.json, ensure it's updated and then use:
+# RUN npm install --omit=dev
+
+# Copy the Sitespeed.io configuration file for the Node.js backend to reference.
+COPY config/sitespeed-config.json /app/config/sitespeed-config.json
+
+# Copy the .env file (if used for environment variables for the Node.js app).
+COPY .env .
+
+# Copy the Node.js backend server code and modules.
+COPY src/ ./src/
+
+# --- Nginx and Frontend Setup ---
+
+# Copy static frontend files to Nginx's default HTML serving directory.
+COPY public/ /usr/share/nginx/html/
+
+# Create directories that will be used for volume mounts:
+# - /app/uploads: Where the Node.js/Multer saves uploaded files (mounted from host).
+# - /usr/share/nginx/html/results: Where Sitespeed.io results are written (mounted from host)
+#   and served by Nginx.
+RUN mkdir -p /app/uploads && \
+    mkdir -p /usr/share/nginx/html/results
+
+# Copy your custom Nginx configuration file.
+# This file defines how Nginx handles requests, including proxying to the Node.js backend.
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80, which is the default port Nginx listens on.
+# This port will be mapped to a host port in docker-compose.yml.
+EXPOSE 80
+
+# Command to start both the Node.js application and Nginx.
+CMD sh -c "node /app/src/app.js & nginx -g 'daemon off;'"

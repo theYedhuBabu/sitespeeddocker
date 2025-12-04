@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detailed Performance Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="css/detailed-report.css">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800" id="reportTitle">Performance Report</h1>
+                <p class="text-gray-600" id="reportSubtitle"></p>
+            </div>
+            <a href="/results.html" class="text-blue-600 hover:underline">&larr; Back to All Results</a>
+        </header>
+
+        <div id="loader" class="text-center p-8">
+            <div class="loader-spinner"></div>
+            <p class="mt-4 text-lg text-gray-600">Loading detailed report...</p>
+        </div>
+
+        <main id="reportContent" class="hidden">
+            <div id="urlSelectorContainer" class="mb-6">
+                <label for="urlSelector" class="block text-sm font-medium text-gray-700">Select a page to view its report:</label>
+                <select id="urlSelector" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+            </div>
+
+            <div class="mb-6 border-b border-gray-200">
+                <nav id="tabs" class="flex space-x-4" aria-label="Tabs">
+                    </nav>
+            </div>
+
+            <div id="tabContent">
+                </div>
+        </main>
+    </div>
+
+    <script src="js/detailed-report.js"></script>
+</body>
+</html>

@@ -36,16 +36,15 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: docker/Dockerfile.web
     container_name: web-app
     ports:
       - "8080:80"
     volumes:
+      - ./uploads:/app/uploads
+      - ./results:/usr/share/nginx/html/results
+      - ./config/sitespeed-config.json:/app/config/sitespeed-config.json
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${UPLOADS_DIR}:/app/uploads
-      - ${RESULTS_DIR}:/usr/share/nginx/html/results
-      - ${CONFIG_FILE}:/app/sitespeed-config.json:ro
-      - ${RESULTS_DIR}:/app/debug_output
     depends_on:
       - influxdb
     networks:
@@ -57,16 +56,20 @@ services:
 
       - CONTAINER_UPLOADS_DIR=/app/uploads
       - CONTAINER_RESULTS_DIR=/usr/share/nginx/html/results
-      - CONTAINER_SITESPEED_CONFIG_PATH=/app/sitespeed-config.json
+      - CONTAINER_SITESPEED_CONFIG_PATH=/app/config/sitespeed-config.json
 
-      - HOST_UPLOADS_DIR=${UPLOADS_DIR}
-      - HOST_RESULTS_DIR=${RESULTS_DIR}
-      - HOST_SITESPEED_CONFIG_PATH=${CONFIG_FILE}
+      - HOST_UPLOADS_DIR=${PWD}/uploads
+      - HOST_RESULTS_DIR=${PWD}/results
+      - HOST_SITESPEED_CONFIG_PATH=${PWD}/config/sitespeed-config.json
 
       - INFLUXDB_URL=${INFLUXDB_URL:-http://influxdb:8086}
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-mytoken}
       - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG:-myorg}
       - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-mysitespeed}
+      # Explicitly pass InfluxDB config to server.js
+      - INFLUX_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-mytoken}
+      - INFLUX_ORG=${DOCKER_INFLUXDB_INIT_ORG:-myorg}
+      - INFLUX_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-mysitespeed}
 
 volumes:
   influxdb-data:
