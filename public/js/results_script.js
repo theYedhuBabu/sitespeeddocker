@@ -115,8 +115,8 @@ async function fetchAndDisplayComparison(testIds) {
     if (comparisonChartInstance) comparisonChartInstance.destroy();
 
     try {
-        const queryParams = testIds.map(id => `id=${encodeURIComponent(id)}`).join('&');
-        const response = await fetch(`/api/tests/compare?${queryParams}`);
+        const queryParams = `testIds=${testIds.map(encodeURIComponent).join(',')}`;
+        const response = await fetch(`/api/comparison?${queryParams}`);
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
             throw new Error(errorData.details || errorData.message || `HTTP error! status: ${response.status}`);

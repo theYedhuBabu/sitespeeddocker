@@ -72,12 +72,38 @@ async function getComparison(testIds) {
         |> filter(fn: (r) => r["_measurement"] == "visualMetrics") 
     `;
 
-    const data = [];
+    const testsMap = new Map();
+
     await new Promise((resolve, reject) => {
         queryApi.queryRows(fluxQuery, {
             next(row, tableMeta) {
                 const o = tableMeta.toObject(row);
-                data.push(o);
+                const testId = o.test_id;
+
+                if (!testsMap.has(testId)) {
+                    testsMap.set(testId, {
+                        id: testId,
+                        url: o.url,
+                        timestamp: o._time,
+                        browser: o.browser,
+                        metrics: {
+                            firstContentfulPaint: null,
+                            largestContentfulPaint: null,
+                            speedIndex: null,
+                            pageLoadTime: null,
+                            totalPageSize: null
+                        }
+                    });
+                }
+
+                const test = testsMap.get(testId);
+                const metricName = o.metricName;
+                const value = o._value;
+
+                if (metricName === 'SpeedIndex') test.metrics.speedIndex = value;
+                else if (metricName === 'firstContentfulPaint') test.metrics.firstContentfulPaint = value;
+                else if (metricName === 'largestContentfulPaint') test.metrics.largestContentfulPaint = value;
+                else if (metricName === 'pageLoadTime') test.metrics.pageLoadTime = value;
             },
             error(error) {
                 console.error('Error querying InfluxDB:', error);
@@ -88,7 +114,7 @@ async function getComparison(testIds) {
             },
         });
     });
-    return data;
+    return Array.from(testsMap.values());
 }
 
 module.exports = {

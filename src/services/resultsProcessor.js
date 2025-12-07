@@ -15,7 +15,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
     const writeApi = getWriteApi();
     writeApi.useDefaultTags({ test_id: testRunId, browser: browser });
 
-    writeApi.useDefaultTags({ test_id: testRunId, browser: browser });
+
 
     const resultsPath = path.join(paths.containerResultsDir, testRunId);
     const pagesPath = path.join(resultsPath, 'pages');
@@ -45,7 +45,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                 if (fs.existsSync(browsertimePath)) {
                     const browsertimeData = JSON.parse(fs.readFileSync(browsertimePath, 'utf8'));
                     const visualMetrics = browsertimeData.visualMetrics;
-                    const url = browsertimeData.pageinfo?.url || browsertimeData.info?.url || browsertimeData.url || 'unknown_url';
+                    const pageUrl = browsertimeData.pageinfo?.url || browsertimeData.info?.url || browsertimeData.url || 'unknown_url';
 
                     // 1. Visual Metrics (Extracting Median)
                     if (visualMetrics) {
@@ -66,7 +66,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                             if (value !== null) {
                                 const point = new Point('visualMetrics')
                                     .tag('test_id', testRunId)
-                                    .tag('url', url)
+                                    .tag('url', pageUrl)
                                     .tag('browser', browser)
                                     .tag('metricName', metricName)
                                     .floatField('value', value);
@@ -95,7 +95,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                         if (value !== undefined && value !== null && !isNaN(value)) {
                             const point = new Point('visualMetrics')
                                 .tag('test_id', testRunId)
-                                .tag('url', url)
+                                .tag('url', pageUrl)
                                 .tag('browser', browser)
                                 .tag('metricName', metricName)
                                 .floatField('value', value);
@@ -112,7 +112,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
 
                     const mediaPoint = new Point('media_assets')
                         .tag('test_id', testRunId)
-                        .tag('url', url)
+                        .tag('url', pageUrl)
                         .tag('group', pageFolder)
                         .stringField('video_path', videoPath)
                         .stringField('lcp_screenshot_path', lcpScreenshotPath);
@@ -124,7 +124,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                     logDebug(`Processing Coach data from ${coachPath}`);
                     const coachData = JSON.parse(fs.readFileSync(coachPath, 'utf8'));
                     const adviceRoot = coachData.advice;
-                    const url = coachData.url || 'unknown_url';
+                    const pageUrl = coachData.url || 'unknown_url';
 
                     if (adviceRoot) {
                         for (const categoryName in adviceRoot) {
@@ -140,7 +140,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                                         try {
                                             const point = new Point('coach_advice')
                                                 .tag('test_id', testRunId)
-                                                .tag('url', url)
+                                                .tag('url', pageUrl)
                                                 .tag('group', pageFolder)
                                                 .tag('adviceId', adviceId)
                                                 .intField('score', score)
@@ -161,7 +161,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                                 try {
                                     const point = new Point('coach_advice')
                                         .tag('test_id', testRunId)
-                                        .tag('url', url)
+                                        .tag('url', pageUrl)
                                         .tag('group', pageFolder)
                                         .tag('adviceId', categoryName) // e.g., 'performance', 'accessibility'
                                         .intField('score', category.score);
@@ -178,7 +178,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                 if (fs.existsSync(pagexrayPath)) {
                     logDebug(`Processing PageXray data from ${pagexrayPath}`);
                     const pagexrayData = JSON.parse(fs.readFileSync(pagexrayPath, 'utf8'));
-                    const url = pagexrayData.url || 'unknown_url';
+                    const pageUrl = pagexrayData.url || 'unknown_url';
                     const contentTypes = pagexrayData.contentTypes;
 
                     if (contentTypes) {
@@ -191,7 +191,7 @@ async function processAndStoreDetailedResults(testRunId, browser, url) {
                             try {
                                 const point = new Point('pagexray')
                                     .tag('test_id', testRunId)
-                                    .tag('url', url)
+                                    .tag('url', pageUrl)
                                     .tag('group', pageFolder)
                                     .tag('contentType', contentType)
                                     .intField('requests', requests)
